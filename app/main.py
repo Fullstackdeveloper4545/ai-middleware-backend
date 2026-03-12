@@ -1,6 +1,7 @@
 import os
 
 from fastapi import FastAPI
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import api as api_router
@@ -30,6 +31,11 @@ def create_app() -> FastAPI:
     @app.get("/")
     def root() -> dict:
         return {"status": "ok"}
+
+    # Render health probe sometimes uses HEAD; respond 200 instead of 405.
+    @app.head("/")
+    def root_head() -> Response:
+        return Response(status_code=200)
 
     return app
 
