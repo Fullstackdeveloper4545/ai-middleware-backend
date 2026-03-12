@@ -1,10 +1,7 @@
 import os
 
 from fastapi import FastAPI
-<<<<<<< HEAD
-=======
 from fastapi.responses import Response
->>>>>>> 01fe1418304252258b701296254d39ce6fad045d
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import api as api_router
@@ -35,14 +32,11 @@ def create_app() -> FastAPI:
     def root() -> dict:
         return {"status": "ok"}
 
-<<<<<<< HEAD
-=======
     # Render health probe sometimes uses HEAD; respond 200 instead of 405.
     @app.head("/")
     def root_head() -> Response:
         return Response(status_code=200)
 
->>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     return app
 
 

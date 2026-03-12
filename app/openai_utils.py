@@ -43,8 +43,6 @@ def _normalize_targets(target_attributes: Optional[Iterable[str]]) -> list[str]:
             normalized.append(key)
     return normalized or DEFAULT_TARGET_ATTRIBUTES.copy()
 
-
-<<<<<<< HEAD
 def _prepare_target_map(target_attributes: Optional[Iterable[str]]) -> list[tuple[str, str]]:
     if not target_attributes:
         defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
@@ -62,23 +60,14 @@ def _prepare_target_map(target_attributes: Optional[Iterable[str]]) -> list[tupl
         return prepared
     defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
     return [(item, _normalize_attr_key(item)) for item in defaults]
-
-
-=======
->>>>>>> 01fe1418304252258b701296254d39ce6fad045d
 def extract_attributes_with_openai(row: Dict[str, Any], target_attributes: Optional[Iterable[str]] = None) -> Dict[str, Any]:
     client = get_client()
     if client is None:
         return {}
 
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-<<<<<<< HEAD
     target_map = _prepare_target_map(target_attributes)
     target_list = ", ".join(normalized for _, normalized in target_map)
-=======
-    targets = _normalize_targets(target_attributes)
-    target_list = ", ".join(targets)
->>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     system = (
         "You extract product attributes from supplier CSV data.\n"
         f"Master attributes (exact keys, lowercase): {target_list}.\n"
@@ -110,14 +99,10 @@ def extract_attributes_with_openai(row: Dict[str, Any], target_attributes: Optio
         data = json.loads(text)
         if isinstance(data, dict):
             normalized = {_normalize_attr_key(k): v for k, v in data.items()}
-<<<<<<< HEAD
             return {
                 original: str(normalized.get(normalized_key) or "")
                 for original, normalized_key in target_map
             }
-=======
-            return {key: str(normalized.get(key) or "") for key in targets}
->>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     except Exception:
         return {}
 
