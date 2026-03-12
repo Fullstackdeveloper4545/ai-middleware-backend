@@ -147,6 +147,28 @@ def _normalize_targets(target_attributes: List[str] | None) -> List[str]:
     return normalized or DEFAULT_TARGET_ATTRIBUTES.copy()
 
 
+<<<<<<< HEAD
+def _prepare_targets(target_attributes: List[str] | None) -> List[tuple[str, str]]:
+    if not target_attributes:
+        defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
+        return [(item, _normalize_attr_key(item)) for item in defaults]
+    prepared: List[tuple[str, str]] = []
+    seen: set[str] = set()
+    for item in target_attributes:
+        original = str(item or "").strip()
+        normalized = _normalize_attr_key(original)
+        if not original or not normalized or normalized in seen:
+            continue
+        prepared.append((original, normalized))
+        seen.add(normalized)
+    if prepared:
+        return prepared
+    defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
+    return [(item, _normalize_attr_key(item)) for item in defaults]
+
+
+=======
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
 # Color detection keywords (Greek + English).
 COLOR_MODIFIERS = [
     "σκούρο",  # ??????
@@ -372,13 +394,37 @@ def _infer_material_from_text(text: str) -> str:
 
 
 def ai_extract(row: Dict[str, Any], target_attributes: List[str] | None = None) -> Dict[str, Any]:
+<<<<<<< HEAD
+    target_pairs = _prepare_targets(target_attributes)
+=======
     targets = _normalize_targets(target_attributes)
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     normalized_row = {
         _normalize_attr_key(str(k)): (str(v).strip() if isinstance(v, str) else v)
         for k, v in row.items()
         if k
     }
     base: Dict[str, Any] = {}
+<<<<<<< HEAD
+    for original_key, normalized_key in target_pairs:
+        if normalized_key == "title":
+            base[original_key] = _row_value(row, "title", "product_title", "product_name", "name")
+        elif normalized_key == "description":
+            base[original_key] = _row_description_text(row)
+        elif normalized_key == "sku":
+            base[original_key] = _row_value(row, "sku", "supplier_sku", "supplier sku", "item_sku", "item sku", "variant_sku", "variant sku")
+        else:
+            base[original_key] = normalized_row.get(normalized_key, "") or ""
+
+    needs_ai = any(not (isinstance(v, str) and v.strip()) for v in base.values())
+    extracted = extract_attributes_with_openai(row, [original for original, _ in target_pairs]) or {} if needs_ai else {}
+
+    merged: Dict[str, Any] = {}
+    for original_key, _ in target_pairs:
+        merged[original_key] = base.get(original_key) or extracted.get(original_key) or ""
+
+    target_key_by_normalized = {normalized_key: original_key for original_key, normalized_key in target_pairs}
+=======
     for key in targets:
         if key == "title":
             base[key] = _row_value(row, "title", "product_title", "product_name", "name")
@@ -395,12 +441,25 @@ def ai_extract(row: Dict[str, Any], target_attributes: List[str] | None = None) 
     merged: Dict[str, Any] = {}
     for key in targets:
         merged[key] = base.get(key) or extracted.get(key) or ""
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
 
     context_title = _row_value(row, "title", "product_title", "product_name", "name")
     context_desc = _row_description_text(row)
     context_blob = _row_text_blob(row)
     context = " ".join([context_title, context_desc, context_blob]).strip()
 
+<<<<<<< HEAD
+    description_key = target_key_by_normalized.get("description")
+    if description_key:
+        # Keep original CSV description stable; never let AI rewrite it.
+        merged[description_key] = base.get(description_key) or ""
+
+    color_key = target_key_by_normalized.get("color")
+    if color_key:
+        csv_color = base.get(color_key) or ""
+        if isinstance(csv_color, str) and csv_color.strip():
+            merged[color_key] = csv_color
+=======
     if "description" in merged:
         # Keep original CSV description stable; never let AI rewrite it.
         merged["description"] = base.get("description") or ""
@@ -409,18 +468,31 @@ def ai_extract(row: Dict[str, Any], target_attributes: List[str] | None = None) 
         csv_color = base.get("color") or ""
         if isinstance(csv_color, str) and csv_color.strip():
             merged["color"] = csv_color
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
         else:
             desc_color = _infer_color_from_text(context_desc)
             if not desc_color:
                 desc_color = _infer_color_from_text(context_blob)
             if not desc_color:
                 desc_color = _infer_color_from_text(context)
+<<<<<<< HEAD
+            merged[color_key] = desc_color or ""
+
+    material_key = target_key_by_normalized.get("material")
+    if material_key and not merged[material_key]:
+        merged[material_key] = _infer_material_from_text(context)
+
+    fabric_key = target_key_by_normalized.get("fabric")
+    if fabric_key and not merged[fabric_key]:
+        merged[fabric_key] = _infer_material_from_text(context)
+=======
             merged["color"] = desc_color or ""
 
     if "material" in merged and not merged["material"]:
         merged["material"] = _infer_material_from_text(context)
     if "fabric" in merged and not merged["fabric"]:
         merged["fabric"] = _infer_material_from_text(context)
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
 
     return merged
 
@@ -439,13 +511,21 @@ def extract_description(row: Dict[str, Any]) -> str:
 
 def map_to_master_attributes(extracted: Dict[str, Any], active_attributes: List[str] | None = None) -> Dict[str, Any]:
     if active_attributes:
+<<<<<<< HEAD
+        lower = {_normalize_attr_key(str(k)): v for k, v in extracted.items()}
+=======
         lower = {str(k).strip().lower(): v for k, v in extracted.items()}
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
         mapped: Dict[str, Any] = {}
         for attr in active_attributes:
             name = str(attr or "").strip()
             if not name:
                 continue
+<<<<<<< HEAD
+            mapped[name] = lower.get(_normalize_attr_key(name), "")
+=======
             mapped[name] = lower.get(name.lower(), "")
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
         return mapped
     return {
         "Color": extracted.get("color") or "",

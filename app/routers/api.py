@@ -38,6 +38,10 @@ from ..schemas import (
     SyncQueueOut,
 )
 from ..utils import (
+<<<<<<< HEAD
+    _normalize_attr_key,
+=======
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     ai_extract,
     extract_description,
     extract_supplier_sku,
@@ -114,13 +118,21 @@ def _available_attribute_names() -> List[str]:
 
 
 def _build_mapped_attributes(extracted: Dict[str, Any], active_attrs: List[str]) -> Dict[str, Any]:
+<<<<<<< HEAD
+    lower = {_normalize_attr_key(str(k)): v for k, v in extracted.items()}
+=======
     lower = {str(k).strip().lower(): v for k, v in extracted.items()}
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     mapped: Dict[str, Any] = {}
     for attr in active_attrs:
         name = str(attr or "").strip()
         if not name:
             continue
+<<<<<<< HEAD
+        mapped[name] = lower.get(_normalize_attr_key(name), "")
+=======
         mapped[name] = lower.get(name.lower(), "")
+>>>>>>> 01fe1418304252258b701296254d39ce6fad045d
     return mapped
 
 
