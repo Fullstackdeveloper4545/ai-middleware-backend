@@ -2,8 +2,8 @@ import csv
 import io
 import re
 import unicodedata
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from .openai_utils import DEFAULT_TARGET_ATTRIBUTES, extract_attributes_with_openai
@@ -15,8 +15,8 @@ def _decode_csv_bytes(raw: bytes) -> str:
         "utf-16",
         "utf-16-le",
         "utf-16-be",
-        "cp1253",      # Greek (Windows)
-        "iso-8859-7",  # Greek (ISO)
+        "cp1253",
+        "iso-8859-7",
         "cp1252",
         "latin-1",
     ]
@@ -41,7 +41,7 @@ def parse_csv_bytes(raw: bytes) -> Tuple[List[str], List[Dict[str, Any]]]:
     headers = [h.strip() for h in (reader.fieldnames or []) if h]
     rows: List[Dict[str, Any]] = []
     for row in reader:
-        cleaned = {}
+        cleaned: Dict[str, Any] = {}
         for k, v in row.items():
             if not k:
                 continue
@@ -91,8 +91,8 @@ def _row_description_text(row: Dict[str, Any]) -> str:
         if (
             "description" in key
             or key in {"desc", "details", "detail", "body", "body html", "body_html", "product_description", "summary"}
-            or "\u03c0\u03b5\u03c1\u03b9\u03b3\u03c1\u03b1\u03c6\u03ae" in key  # περιγραφή
-            or "\u03c0\u03b5\u03c1\u03b9\u03b3\u03c1\u03b1\u03c6\u03b7" in key  # περιγραφη
+            or "\u03c0\u03b5\u03c1\u03b9\u03b3\u03c1\u03b1\u03c6\u03ae" in key
+            or "\u03c0\u03b5\u03c1\u03b9\u03b3\u03c1\u03b1\u03c6\u03b7" in key
         ):
             text_val = _strip_html(str(v)).strip()
             if text_val:
@@ -107,25 +107,18 @@ def _row_text_blob(row: Dict[str, Any]) -> str:
     for v in row.values():
         if v is None:
             continue
-        if isinstance(v, str):
-            cleaned = _strip_html(v).strip()
-            if cleaned:
-                parts.append(cleaned)
-        else:
-            try:
-                cleaned = _strip_html(str(v)).strip()
-                if cleaned:
-                    parts.append(cleaned)
-            except Exception:
-                continue
+        try:
+            cleaned = _strip_html(str(v)).strip()
+        except Exception:
+            continue
+        if cleaned:
+            parts.append(cleaned)
     return " ".join(parts)
 
 
 def _normalize_text(value: str) -> str:
     lowered = value.lower()
-    return "".join(
-        ch for ch in unicodedata.normalize("NFD", lowered) if unicodedata.category(ch) != "Mn"
-    )
+    return "".join(ch for ch in unicodedata.normalize("NFD", lowered) if unicodedata.category(ch) != "Mn")
 
 
 def _normalize_attr_key(value: str) -> str:
@@ -135,16 +128,6 @@ def _normalize_attr_key(value: str) -> str:
     cleaned = cleaned.replace("_", " ").replace("-", " ")
     return cleaned.lower()
 
-
-def _normalize_targets(target_attributes: List[str] | None) -> List[str]:
-    if not target_attributes:
-        return DEFAULT_TARGET_ATTRIBUTES.copy()
-    normalized: List[str] = []
-    for item in target_attributes:
-        key = _normalize_attr_key(str(item))
-        if key and key not in normalized:
-            normalized.append(key)
-    return normalized or DEFAULT_TARGET_ATTRIBUTES.copy()
 
 def _prepare_targets(target_attributes: List[str] | None) -> List[tuple[str, str]]:
     if not target_attributes:
@@ -163,14 +146,14 @@ def _prepare_targets(target_attributes: List[str] | None) -> List[tuple[str, str
         return prepared
     defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
     return [(item, _normalize_attr_key(item)) for item in defaults]
-# Color detection keywords (Greek + English).
+
 COLOR_MODIFIERS = [
-    "σκούρο",  # ??????
-    "σκούρα",  # ??????
-    "ανοιχτό",  # ???????
-    "ανοιχτή",  # ???????
-    "ανοικτό",  # ???????
-    "ανοικτή",  # ???????
+    "ÏƒÎºÎ¿ÏÏÎ¿",
+    "ÏƒÎºÎ¿ÏÏÎ±",
+    "Î±Î½Î¿Î¹Ï‡Ï„ÏŒ",
+    "Î±Î½Î¿Î¹Ï‡Ï„Î®",
+    "Î±Î½Î¿Î¹ÎºÏ„ÏŒ",
+    "Î±Î½Î¿Î¹ÎºÏ„Î®",
     "dark",
     "light",
     "deep",
@@ -245,30 +228,24 @@ def _load_greek_colors() -> List[str]:
     return deduped or DEFAULT_GREEK_COLOR_WORDS
 
 
-GREEK_COLOR_WORDS = _load_greek_colors()
-
 def _get_color_keywords() -> list[tuple[str, str]]:
     greek_colors = _load_greek_colors()
     keywords: list[tuple[str, str]] = []
     seen: set[str] = set()
     for mod in COLOR_MODIFIERS:
         for color in EN_COLOR_WORDS + greek_colors:
-            canonical = f"{mod} {color}"
-            norm = _normalize_text(canonical)
-            if norm and norm not in seen:
-                keywords.append((canonical, norm))
-                seen.add(norm)
-            canonical = f"{mod}-{color}"
-            norm = _normalize_text(canonical)
-            if norm and norm not in seen:
-                keywords.append((canonical, norm))
-                seen.add(norm)
+            for canonical in (f"{mod} {color}", f"{mod}-{color}"):
+                norm = _normalize_text(canonical)
+                if norm and norm not in seen:
+                    keywords.append((canonical, norm))
+                    seen.add(norm)
     for color in EN_COLOR_WORDS + greek_colors:
         norm = _normalize_text(color)
         if norm and norm not in seen:
             keywords.append((color, norm))
             seen.add(norm)
     return keywords
+
 
 def _find_keyword_in_text(text: str, keywords: List[str]) -> str:
     if not text:
@@ -306,11 +283,11 @@ def _infer_color_from_text(text: str) -> str:
 
 def _extract_labeled_color(text: str) -> str:
     patterns = [
-        r"\b(?:color|colour|χρώμα|χρωμα)\s*[:\-–]\s*([^\n]+)",
+        r"\b(?:color|colour|Ï‡ÏÏŽÎ¼Î±|Ï‡ÏÏ‰Î¼Î±)\s*[:\-â€“]\s*([^\n]+)",
         r"\b(?:color|colour)\s+is\s+([^\n]+)",
-        r"\b(?:χρώμα|χρωμα)\s+είναι\s+([^\n]+)",
+        r"\b(?:Ï‡ÏÏŽÎ¼Î±|Ï‡ÏÏ‰Î¼Î±)\s+ÎµÎ¯Î½Î±Î¹\s+([^\n]+)",
     ]
-    split_markers = r"\b(?:material|fabric|υλικό|υλικ[όο]|dimensions|διαστάσεις|συνολικές)\b"
+    split_markers = r"\b(?:material|fabric|Ï…Î»Î¹ÎºÏŒ|Ï…Î»Î¹Îº[ÏŒÎ¿]|dimensions|Î´Î¹Î±ÏƒÏ„Î¬ÏƒÎµÎ¹Ï‚|ÏƒÏ…Î½Î¿Î»Î¹ÎºÎ­Ï‚)\b"
     fallback = ""
     for pattern in patterns:
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
@@ -318,7 +295,7 @@ def _extract_labeled_color(text: str) -> str:
             if not value:
                 continue
             value = re.split(split_markers, value, maxsplit=1, flags=re.IGNORECASE)[0]
-            value = value.strip(" \t\r\n;,:-–")
+            value = value.strip(" \t\r\n;,:-â€“")
             if not value:
                 continue
             keyword = _extract_color_keyword(value)
@@ -351,9 +328,9 @@ def _extract_color_keyword(text: str) -> str:
 
 def _extract_soft_color(text: str) -> str:
     greek_soft = [
-        "μαλακό",  # ??????
-        "μαλακή",  # ??????
-        "μαλακός",  # ???????
+        "Î¼Î±Î»Î±ÎºÏŒ",
+        "Î¼Î±Î»Î±ÎºÎ®",
+        "Î¼Î±Î»Î±ÎºÏŒÏ‚",
     ]
     patterns = [
         rf"\b(?:{greek_soft[0]}|{greek_soft[1]}|{greek_soft[2]})\s+([^\s:;,.]+)",
@@ -413,7 +390,6 @@ def ai_extract(row: Dict[str, Any], target_attributes: List[str] | None = None) 
         merged[original_key] = base.get(original_key) or extracted.get(original_key) or ""
 
     target_key_by_normalized = {normalized_key: original_key for original_key, normalized_key in target_pairs}
-
     context_title = _row_value(row, "title", "product_title", "product_name", "name")
     context_desc = _row_description_text(row)
     context_blob = _row_text_blob(row)

@@ -33,16 +33,6 @@ def _normalize_attr_key(value: str) -> str:
     return cleaned.lower()
 
 
-def _normalize_targets(target_attributes: Optional[Iterable[str]]) -> list[str]:
-    if not target_attributes:
-        return DEFAULT_TARGET_ATTRIBUTES.copy()
-    normalized: list[str] = []
-    for item in target_attributes:
-        key = _normalize_attr_key(str(item))
-        if key and key not in normalized:
-            normalized.append(key)
-    return normalized or DEFAULT_TARGET_ATTRIBUTES.copy()
-
 def _prepare_target_map(target_attributes: Optional[Iterable[str]]) -> list[tuple[str, str]]:
     if not target_attributes:
         defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
@@ -60,7 +50,11 @@ def _prepare_target_map(target_attributes: Optional[Iterable[str]]) -> list[tupl
         return prepared
     defaults = DEFAULT_TARGET_ATTRIBUTES.copy()
     return [(item, _normalize_attr_key(item)) for item in defaults]
-def extract_attributes_with_openai(row: Dict[str, Any], target_attributes: Optional[Iterable[str]] = None) -> Dict[str, Any]:
+
+def extract_attributes_with_openai(
+    row: Dict[str, Any],
+    target_attributes: Optional[Iterable[str]] = None,
+) -> Dict[str, Any]:
     client = get_client()
     if client is None:
         return {}

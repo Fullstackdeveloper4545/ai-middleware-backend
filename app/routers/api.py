@@ -19,8 +19,8 @@ from ..database import (
     sync_queue_col,
 )
 from ..schemas import (
-    ApprovalRequest,
     ApprovalOut,
+    ApprovalRequest,
     AttributeRule,
     AttributeRuleOut,
     AttributeSessionOut,
@@ -52,15 +52,17 @@ router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(require_ap
 
 
 DEFAULT_ATTRIBUTES = [
-    {"master_attribute": "Color", "allowed_values": [], "rules": None, "active": True},
-    {"master_attribute": "Description", "allowed_values": [], "rules": None, "active": True},
-    {"master_attribute": "Fabric", "allowed_values": [], "rules": None, "active": True},
-    {"master_attribute": "SKU", "allowed_values": [], "rules": None, "active": True},
-    {"master_attribute": "Material", "allowed_values": [], "rules": None, "active": False},
-    {"master_attribute": "Size", "allowed_values": [], "rules": None, "active": False},
-    {"master_attribute": "Style", "allowed_values": [], "rules": None, "active": False},
-    {"master_attribute": "Drawers", "allowed_values": [], "rules": None, "active": False},
+  {"master_attribute": "Color", "allowed_values": [], "rules": None, "active": True},
+  {"master_attribute": "Description", "allowed_values": [], "rules": None, "active": True},
+  {"master_attribute": "Fabric", "allowed_values": [], "rules": None, "active": True},
+  {"master_attribute": "SKU", "allowed_values": [], "rules": None, "active": True},
+  {"master_attribute": "Material", "allowed_values": [], "rules": None, "active": False},
+  {"master_attribute": "Size", "allowed_values": [], "rules": None, "active": False},
+  {"master_attribute": "Style", "allowed_values": [], "rules": None, "active": False},
+  {"master_attribute": "Drawers", "allowed_values": [], "rules": None, "active": False},
 ]
+AUTO_SEED_DEFAULT_ATTRIBUTES = os.getenv("AUTO_SEED_DEFAULT_ATTRIBUTES", "false").lower() in {"1", "true", "yes"}
+AUTO_CREATE_DEFAULT_SESSION = os.getenv("AUTO_CREATE_DEFAULT_SESSION", "false").lower() in {"1", "true", "yes"}
 
 
 def _obj_id(value: str) -> ObjectId | str:
@@ -81,6 +83,8 @@ def _serialize_many(cursor: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _ensure_default_attributes() -> None:
+    if not AUTO_SEED_DEFAULT_ATTRIBUTES:
+        return
     existing = attribute_map_col.find_one({})
     if existing:
         return
@@ -125,12 +129,19 @@ def _build_mapped_attributes(extracted: Dict[str, Any], active_attrs: List[str])
     return mapped
 
 
-def _get_or_create_active_session() -> Dict[str, Any]:
+def _get_or_create_active_session() -> Optional[Dict[str, Any]]:
     session = attribute_sessions_col.find_one({"is_active": True})
     if session:
         return session
+    latest = attribute_sessions_col.find_one({}, sort=[("updated_at", -1)])
+    if latest:
+        return latest
+    if not AUTO_CREATE_DEFAULT_SESSION:
+        return None
     selected = _active_attribute_names()
     available = _available_attribute_names()
+    if not selected and not available:
+        return None
     doc = {
         "selected_attributes": selected,
         "available_attributes": available or selected,
@@ -216,6 +227,8 @@ def upsert_attribute(payload: AttributeRule):
 @router.get("/attributes/session", response_model=AttributeSessionOut)
 def get_attribute_session():
     session = _get_or_create_active_session()
+    if not session:
+        raise HTTPException(status_code=404, detail="No active attribute session")
     return _serialize(session)
 
 
@@ -286,7 +299,6 @@ def delete_attribute_session(session_id: str):
     deleted = attribute_sessions_col.delete_one({"_id": _obj_id(session_id)})
     if deleted.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Session not found")
-    # Ensure there is an active session
     active = attribute_sessions_col.find_one({"is_active": True})
     if not active:
         latest = attribute_sessions_col.find_one({}, sort=[("updated_at", -1)])
@@ -544,10 +556,10 @@ def seed_demo():
             "supplier_id": supplier_id,
             "supplier_sku": "SKU-001",
             "title": "Demo Velvet Headboard",
-            "description": "Μαλακό κόκκινο βελούδο για κομψό υπνοδωμάτιο.",
+            "description": "ÎœÎ±Î»Î±ÎºÏŒ ÎºÏŒÎºÎºÎ¹Î½Î¿ Î²ÎµÎ»Î¿ÏÎ´Î¿ Î³Î¹Î± ÎºÎ¿Î¼ÏˆÏŒ Ï…Ï€Î½Î¿Î´Ï‰Î¼Î¬Ï„Î¹Î¿.",
             "raw_attributes": {},
-            "extracted_attributes": {"color": "κόκκινο", "description": "Μαλακό κόκκινο βελούδο", "fabric": "βελούδο", "sku": "SKU-001"},
-            "mapped_attributes": {"Color": "κόκκινο", "Description": "Μαλακό κόκκινο βελούδο", "Fabric": "βελούδο", "SKU": "SKU-001"},
+            "extracted_attributes": {"color": "ÎºÏŒÎºÎºÎ¹Î½Î¿", "description": "ÎœÎ±Î»Î±ÎºÏŒ ÎºÏŒÎºÎºÎ¹Î½Î¿ Î²ÎµÎ»Î¿ÏÎ´Î¿", "fabric": "Î²ÎµÎ»Î¿ÏÎ´Î¿", "sku": "SKU-001"},
+            "mapped_attributes": {"Color": "ÎºÏŒÎºÎºÎ¹Î½Î¿", "Description": "ÎœÎ±Î»Î±ÎºÏŒ ÎºÏŒÎºÎºÎ¹Î½Î¿ Î²ÎµÎ»Î¿ÏÎ´Î¿", "Fabric": "Î²ÎµÎ»Î¿ÏÎ´Î¿", "SKU": "SKU-001"},
             "approval_status": "pending",
             "extraction_confidence": 0.65,
             "created_at": now,
@@ -557,10 +569,10 @@ def seed_demo():
             "supplier_id": supplier_id,
             "supplier_sku": "SKU-002",
             "title": "Demo Headboard",
-            "description": "Χρώμα: Σκούρο πράσινο, Ύφασμα: βελούδο.",
+            "description": "Î§ÏÏŽÎ¼Î±: Î£ÎºÎ¿ÏÏÎ¿ Ï€ÏÎ¬ÏƒÎ¹Î½Î¿, ÎŽÏ†Î±ÏƒÎ¼Î±: Î²ÎµÎ»Î¿ÏÎ´Î¿.",
             "raw_attributes": {},
-            "extracted_attributes": {"color": "Σκούρο πράσινο", "description": "Χρώμα: Σκούρο πράσινο", "fabric": "βελούδο", "sku": "SKU-002"},
-            "mapped_attributes": {"Color": "Σκούρο πράσινο", "Description": "Χρώμα: Σκούρο πράσινο", "Fabric": "βελούδο", "SKU": "SKU-002"},
+            "extracted_attributes": {"color": "Î£ÎºÎ¿ÏÏÎ¿ Ï€ÏÎ¬ÏƒÎ¹Î½Î¿", "description": "Î§ÏÏŽÎ¼Î±: Î£ÎºÎ¿ÏÏÎ¿ Ï€ÏÎ¬ÏƒÎ¹Î½Î¿", "fabric": "Î²ÎµÎ»Î¿ÏÎ´Î¿", "sku": "SKU-002"},
+            "mapped_attributes": {"Color": "Î£ÎºÎ¿ÏÏÎ¿ Ï€ÏÎ¬ÏƒÎ¹Î½Î¿", "Description": "Î§ÏÏŽÎ¼Î±: Î£ÎºÎ¿ÏÏÎ¿ Ï€ÏÎ¬ÏƒÎ¹Î½Î¿", "Fabric": "Î²ÎµÎ»Î¿ÏÎ´Î¿", "SKU": "SKU-002"},
             "approval_status": "pending",
             "extraction_confidence": 0.65,
             "created_at": now,

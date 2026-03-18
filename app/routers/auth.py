@@ -1,9 +1,13 @@
+import os
+import smtplib
 import uuid
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+import requests
 
 from ..config import ADMIN_EMAIL, ADMIN_PASSWORD, RESET_BASE_URL
 
@@ -38,6 +42,60 @@ def _is_valid_token(token: str) -> bool:
     return True
 
 
+def _send_reset_email(to_email: str, reset_link: str) -> None:
+    resend_key = os.getenv("RESEND_API_KEY", "").strip()
+    if resend_key:
+        from_email = os.getenv("RESET_EMAIL_FROM", "").strip() or os.getenv("SMTP_USER", "").strip() or ADMIN_EMAIL
+        if not from_email:
+            raise RuntimeError("RESET_EMAIL_FROM not configured")
+        payload = {
+            "from": from_email,
+            "to": [to_email],
+            "subject": "Reset your password",
+            "text": (
+                "Click the link below to reset your password:\n\n"
+                f"{reset_link}\n\n"
+                "This link expires in 20 minutes."
+            ),
+        }
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            json=payload,
+            headers={"Authorization": f"Bearer {resend_key}"},
+            timeout=10,
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Resend error {resp.status_code}: {resp.text}")
+        return
+
+    host = os.getenv("SMTP_HOST", "").strip()
+    if not host:
+        raise RuntimeError("SMTP_HOST not configured")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USER", "").strip()
+    password = os.getenv("SMTP_PASS", "")
+    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
+
+    msg = EmailMessage()
+    msg["Subject"] = "Reset your password"
+    msg["From"] = user or ADMIN_EMAIL
+    msg["To"] = to_email
+    msg.set_content(
+        "Click the link below to reset your password:\n\n"
+        f"{reset_link}\n\n"
+        "This link expires in 20 minutes."
+    )
+
+    with smtplib.SMTP(host, port, timeout=10) as server:
+        server.ehlo()
+        if use_tls:
+            server.starttls()
+            server.ehlo()
+        if user and password:
+            server.login(user, password)
+        server.send_message(msg)
+
+
 @router.post("/login")
 def login(payload: LoginRequest):
     username = payload.username.strip()
@@ -51,13 +109,24 @@ def login(payload: LoginRequest):
 @router.post("/forgot")
 def forgot(payload: ForgotRequest):
     email = payload.email.strip().lower()
-    if email != ADMIN_EMAIL.lower():
-        # For security, respond with success even if email does not match.
-        return {"message": "If that email exists, a reset link was sent."}
+    allow_link_in_response = os.getenv("RESET_LINK_IN_RESPONSE", "").lower() in {"1", "true", "yes"}
+    admin_email = ADMIN_EMAIL.strip().lower()
+    if not admin_email:
+        raise HTTPException(status_code=500, detail="ADMIN_EMAIL not configured")
+    if email != admin_email:
+        raise HTTPException(status_code=400, detail="Admin email is wrong.")
     token = uuid.uuid4().hex
     _RESET_TOKENS[token] = datetime.utcnow() + timedelta(minutes=20)
     reset_link = f"{RESET_BASE_URL}?token={token}"
-    return {"message": f"Reset link generated: {reset_link}"}
+    try:
+        _send_reset_email(ADMIN_EMAIL, reset_link)
+        if allow_link_in_response:
+            return {"message": f"Reset email sent. Link: {reset_link}"}
+        return {"message": "Reset email sent."}
+    except Exception as exc:  # noqa: BLE001
+        if allow_link_in_response:
+            return {"message": f"Reset link generated: {reset_link}"}
+        raise HTTPException(status_code=500, detail=f"Failed to send reset email: {exc}")
 
 
 @router.post("/reset")
